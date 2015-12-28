@@ -3,15 +3,16 @@ library(dplyr)
 library(ggplot2)
 library(reshape2)
 library(data.table)
+library(ggmap)
 
 
-load("tyetagdata.RData")
+load("tyetagdata2.RData")
 
 file1 ="C:/Users/62552/Desktop/桃園etag分析/tycetagdata2.csv"
 file2 ="C:/Users/62552/Desktop/桃園etag分析/20150902 eTag設備位置3.xlsx"
 
 data_row<-read.table(file1, header=T,sep = ",",encoding = "UTF-8")
- gate_xy<-read.xlsx(file2, header=T,sheetName = '1',encoding = "UTF-8")
+gate_xy<-read.xlsx(file2, header=T,sheetName = '1',encoding = "UTF-8")
 # str(data_row)
 data_row$ETAGID=as.character(data_row$ETAGID)
 data_row$ETAGDATE=as.POSIXct(data_row$ETAGDATE)
@@ -30,17 +31,19 @@ data_row_time_test=filter(data_row_time,data_row_time$month==9,
                                         data_row_time$date==8,
                                         data_row_time$hour>=7&data_row_time$hour<10)
 data_row_time_test2<-mutate(data_row_time_test,tt=as.numeric(data_row_time_test$ETAGDATE))
+fff<-filter(data_row_time_test2,data_row_time_test2$ETAGPLATEID=="003000000100086762B73292")
 
    orderdf<-data_row_time_test2[order(data_row_time_test2$ETAGPLATEID,data_row_time_test2$tt),]
 
-   str(orderdf)
-   table(orderdf$ETAGID)
-   length(orderdf$ETAGPLATEID)
+   #str(orderdf)
+   #table(orderdf$ETAGID)
+   #length(orderdf$ETAGPLATEID)
    cc<-table(orderdf$ETAGPLATEID)
    
    cc<-as.data.frame(cc)
    colnames(cc)=c("carid","step")
-   cccarid=c(as.character(cc$carid))
+   cc_steplarge1<-filter(cc,cc$step>1)
+   cccarid=c(as.character(cc_steplarge1$carid))
    #str(cccarid)
    #cccarid同車輛過etag 次數(通過etag偵測點數) 
    
@@ -57,7 +60,7 @@ data_row_time_test2<-mutate(data_row_time_test,tt=as.numeric(data_row_time_test$
   carodtb_od_info_add<-c()
   carodtb_od_info_finall<-c()    
    
-   for(j in 30486:30492){
+   for(j in 1:length(cccarid)){
       
    carodtb_carid<-cccarid[[j]]
 
@@ -102,7 +105,6 @@ data_row_time_test2<-mutate(data_row_time_test,tt=as.numeric(data_row_time_test$
          
          carodtb_o_time<-as.character(carodtb[i,]$ETAGDATE)
          carodtb_o_point<-carodtb[i,]$ETAGID
-      
        }
      }
 
@@ -113,14 +115,177 @@ data_row_time_test2<-mutate(data_row_time_test,tt=as.numeric(data_row_time_test$
   
    }
   
-  df<-as.data.frame(carodtb_od_info_finall)
-  str(df)
-  df$V1<-as.character(df$V1)
-  df$V2<-as.POSIXct(df$V2)
-  df$V3<-as.character(df$V3)
-  df$V4<-as.POSIXct(df$V4)
-  df$V5<-as.character(df$V5)
-  colnames(df)<-c("carodtb_carid","carodtb_o_time","carodtb_o_point","carodtb_d_time","carodtb_d_point")
+  od_df<-as.data.frame(carodtb_od_info_finall)
+  od_df$V1<-as.character(od_df$V1)
+  od_df$V2<-as.POSIXct(od_df$V2)
+  od_df$V3<-as.character(od_df$V3)
+  od_df$V4<-as.POSIXct(od_df$V4)
+  od_df$V5<-as.character(od_df$V5)
+  colnames(od_df)<-c("carodtb_carid","carodtb_o_time","carodtb_o_point","carodtb_d_time","carodtb_d_point")
+
+
+  #o點分布
+  #od_df_o_anal(各o點出發數量分布)
+
+  
+
+  od_df_o_anal<-table(od_df$carodtb_o_point)
+  od_df_o_anal<-as.data.frame(od_df_o_anal)
+  colnames(od_df_o_anal)=c("opointetgid","freq")
+  opointetgid<-c(as.character(od_df_o_anal$opointetgid))
+  
+  odtable_from_o<-c()
+  #各o出發的d點分布
+  for(i in 1:length(opointetgid)){
+    
+#     i=2
+    o_id<-opointetgid[[i]]
+    d_freq<-table((filter(od_df,od_df$carodtb_o_point==o_id))$carodtb_d_point)
+    d_freq<-as.data.frame(d_freq)
+    o_d_freq<-mutate(d_freq,o_pint=o_id)
+    o_d_freq<-data.frame(o_d_freq$o_pint,o_d_freq$Var1,o_d_freq$Freq)
+    o_d_freq<-mutate(o_d_freq,o_d_freqrate=o_d_freq$o_d_freq.Freq/sum(o_d_freq$o_d_freq.Freq))
+    colnames(o_d_freq)<-c("o_point","d_point","freq_num","freq_rate")
+    
+    odtable_from_o<-rbind(odtable_from_o,o_d_freq)#odtable_from_o(全od旅次數量分布)
+  }
+  colnames(odtable_from_o) <-c("設備ID","d_point","freq_num","freq_rate")
+  joindb1<-inner_join(odtable_from_o,gate_xy,by="設備ID")
+  colnames(joindb1)<-c("o_point",
+                      "設備ID",
+                      "freq_num",
+                      "freq_rate",
+                      "設備編號",
+                      "行政區",
+                      "路口",
+                      "方向",
+                      "lon",
+                      "lat")
+  joindb1<-inner_join(joindb1,gate_xy,by="設備ID")
+  colnames(joindb1)<-c("o_point",
+                       "d_point",
+                       "freq_num",
+                       "freq_rate",
+                       "o_設備編號",
+                       "o_行政區",
+                       "o_路口",
+                       "o_方向",
+                       "o_lon",
+                       "o_lat",
+                       "d_設備編號",
+                       "d_行政區",
+                       "d_路口",
+                       "d_方向",
+                       "d_lon",
+                       "d_lat")
+
+#    for(i in 1:nrow(od_table_from_o_map_data)){
+    
+    nn=nrow(od_table_from_o_map_data)
+    
+    
+    route_df_total=c()
+    centerpoint="24.97627, 121.27003"
+      for(i in 37:60){
+
+      rout_od<-od_table_from_o_map_data[i,]
+      
+      from_lon<-rout_od$lon.x
+      from_lat<-rout_od$lat.x
+      
+      to_lon<-rout_od$lon.y
+      to_lat<-rout_od$lat.y  
+
+      from<-paste(as.character(from_lat),as.character(from_lon),sep=",")
+      to<-paste(as.character(to_lat),as.character(to_lon),sep=",")
+      
+      route_df <- route(from, to, structure = "route")
+      route_df_total<-rbind(route_df_total,route_df)
+      
+      
+      #Colors=grDevices::rainbow(13)
+
+#       path=geom_path(aes(x = lon, y = lat),  
+#                         # colour = Colors[i], 
+#                         colour ="red",
+#                         size = 1.5,
+#                         data = route_df) 
+#                         # lineend = "round")
+      
+      
+# 
+#       if(i==37){
+#         od_map=qmap(centerpoint, zoom = 12)+path
+#       }else{      
+#        od_map=od_map+path
+# 
+#       }
+#       
+    }
+    
+    od_map
+    rm(od_map)
+
+    
+    centerpoint="24.97627, 121.27003"
+    for(i in 37:50){
+      
+      rout_od<-od_table_from_o_map_data[i,]
+      
+      from_lon<-rout_od$lon.x
+      from_lat<-rout_od$lat.x
+      
+      to_lon<-rout_od$lon.y
+      to_lat<-rout_od$lat.y  
+      
+      from<-paste(as.character(from_lat),as.character(from_lon),sep=",")
+      to<-paste(as.character(to_lat),as.character(to_lon),sep=",")
+      
+      legs_df <-route(from, to)
+      
+      #Colors=grDevices::rainbow(13)
+      
+      path=geom_segment(
+        aes(x = startLon, y = startLat, xend = endLon, yend = endLat),
+        colour = "red", size = 1.5, data = legs_df
+      )
+      # lineend = "round")
+      
+      
+      if(i==37){
+        od_map=qmap(centerpoint, zoom = 11)+path
+      }else{      
+        (od_map=od_map+path)
+
+        
+        rm(path)
+        rm(rout_od)
+      }
+      
+    }
+    
+    od_map
+    rm(od_map)
+    
+    
+    
+    
+    
+    rm(od_map)
+    
+    
+  
+#   驗算 ok  
+#   totalnum<-sum(odtable_from_o$freq_num)
+#   totalnum
+  
+  
+    carodtb_od_info<-c()
+  carodtb_od_info_add<-c()
+  carodtb_od_info_finall<-c()    
+  
+  
+  
   
   
 carodtb_od_info   
