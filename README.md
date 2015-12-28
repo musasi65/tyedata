@@ -1,3 +1,3 @@
 # tyedata
 
-this pro is for analisis the et data od tycity~
+This proj is for analying the et row data of tycity.
